@@ -36,7 +36,7 @@ class ChargeResolutionPlotter(Plotter):
     def _plot(self, x, y, yerr, label=''):
         color = self.ax._get_lines.get_next_color()
         (_, caps, _) = self.ax.errorbar(
-            x, y, yerr=yerr, mew=1, capsize=3, elinewidth=0.7,
+            x, y, yerr=None, mew=1, capsize=3, elinewidth=0.7,
             markersize=3, color=color, label=label
         )
         for cap in caps:
@@ -164,6 +164,11 @@ class ChargeResolutionPlotter(Plotter):
         poisson = self.poisson(true)
         self.ax.plot(true, poisson, '--', color='grey', label="Poisson")
 
+    def plot_opct_file(self):
+        f = np.load("/Users/Jason/Software/CHECLabPy_sandbox/charge_resolution/opct_limit.npz")
+        x = f['x']
+        cr = f['cr']
+        self.ax.plot(x, cr, '-', color='purple', label="40% OPCT Limit")
 
 
 class ChargeResolutionWRRPlotter(ChargeResolutionPlotter):
@@ -185,6 +190,13 @@ class ChargeResolutionWRRPlotter(ChargeResolutionPlotter):
         poisson = self.poisson(true)
         poisson /= self.requirement(true)
         self.ax.plot(true, poisson, '--', color='grey', label="Poisson")
+
+    def plot_opct_file(self):
+        f = np.load("/Users/Jason/Software/CHECLabPy_sandbox/charge_resolution/opct_limit.npz")
+        x = f['x']
+        cr = f['cr']
+        cr /= self.requirement(x)
+        self.ax.plot(x, cr, '-', color='purple', label="40% OPCT Limit")
 
     def finish(self):
         self.ax.set_xlabel("True Charge (p.e.)")
@@ -239,6 +251,11 @@ class ChargeMeanPlotter(Plotter):
         x, y, yerr = bin_points(x, y, yerr)
         self._plot(x, y, yerr, label)
 
+    def plot_opct_file(self):
+        f = np.load("/Users/Jason/Software/CHECLabPy_sandbox/charge_resolution/opct_limit.npz")
+        x = f['x']
+        mean = f['mean'] / x
+        self.ax.plot(x, mean, '-', color='blue', label="40% OPCT Limit")
 
     def finish(self):
         p = np.linspace(self.x_min, self.x_max, 1000)
