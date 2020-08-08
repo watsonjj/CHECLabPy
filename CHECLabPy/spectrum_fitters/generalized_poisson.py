@@ -1,13 +1,13 @@
 import numpy as np
-from numba import njit
-from math import exp, pow, sqrt
+from numba import njit, vectorize, float64, int64
+from math import exp, pow, sqrt, lgamma, log
 from CHECLabPy.stats.pdf import binom, poisson, normal_pdf, poisson_logpmf
 from CHECLabPy.core.spectrum_fitter import SpectrumFitter, SpectrumParameter, \
     SpectrumParameterCollection
 from iminuit.cost import _sum_log_x
 
 
-class SiPMGentileFitter(SpectrumFitter):
+class SiPMGeneralizedPoissonFitter(SpectrumFitter):
     def __init__(self, n_illuminations):
         """
         SpectrumFitter which uses the SiPM fitting formula from Gentile 2010
@@ -21,7 +21,7 @@ class SiPMGentileFitter(SpectrumFitter):
             SpectrumParameter("spe", 25, (0, 40)),
             SpectrumParameter("spe_sigma", 2, (0, 20)),
             SpectrumParameter("opct", 0.4, (0, 1)),
-            SpectrumParameter("lambda_", 0.7, (0, 6), multi=True),
+            SpectrumParameter("lambda_", 0.7, (0, 3), multi=True),
         ], n_illuminations)
         self.n_bins = 100
         self.range = (-30, 200)
@@ -47,7 +47,7 @@ class SiPMGentileFitter(SpectrumFitter):
 
 @njit(fastmath=True)
 def calculate_spectrum(data_x, lookup, *parameter_values):
-    return sipm_gentile_spe(
+    return sipm_gen_poisson_spe(
         x=data_x,
         eped=parameter_values[lookup["eped"]],
         eped_sigma=parameter_values[lookup["eped_sigma"]],
@@ -58,8 +58,30 @@ def calculate_spectrum(data_x, lookup, *parameter_values):
     )
 
 
+@vectorize([float64(int64, float64, float64)], fastmath=True)
+def generalized_poisson(k, mu, xtalk):
+    """
+    Generalized Poisson probabilities for a given mean number per event
+    and per xtalk event.
+
+    Parameters
+    ----------
+    k : int
+    mu : float
+        The mean number per event
+    xtalk : float
+        The mean number per xtalk event
+
+    Returns
+    -------
+    probability : float
+    """
+    mu_dash = (mu + k * xtalk)
+    return mu * exp((k-1) * log(mu_dash) - mu_dash - lgamma(k+1))
+
+
 @njit(fastmath=True)
-def sipm_gentile_spe(x, eped, eped_sigma, spe, spe_sigma, opct, lambda_):
+def sipm_gen_poisson_spe(x, eped, eped_sigma, spe, spe_sigma, opct, lambda_):
     """
     Fit for the SPE spectrum of a SiPM
 
@@ -86,37 +108,21 @@ def sipm_gentile_spe(x, eped, eped_sigma, spe, spe_sigma, opct, lambda_):
     spectrum : ndarray
         The y values of the total spectrum.
     """
-    # Obtain pedestal peak
-    p_ped = exp(-lambda_)
-    spectrum = p_ped * normal_pdf(x, eped, eped_sigma)
-
-    pk_max = 0
-
-    # Loop over the possible total number of cells fired
-    for k in range(1, 100):
-        pk = 0
-        for j in range(1, k+1):
-            pj = poisson(j, lambda_)  # Probability for j initial fired cells
-
-            # Skip insignificant probabilities
-            if pj < 1e-4:
-                continue
-
-            # Sum the probability from the possible combinations which result
-            # in a total of k fired cells to get the total probability of k
-            # fired cells
-            pk += pj * pow(1-opct, j) * pow(opct, k-j) * binom(k-1, j-1)
+    spectrum = np.zeros_like(x)
+    p_max = 0
+    for k in range(100):
+        p = generalized_poisson(k, lambda_, opct)
 
         # Skip insignificant probabilities
-        if pk > pk_max:
-            pk_max = pk
-        elif pk < 1e-4:
+        if p > p_max:
+            p_max = p
+        elif p < 1e-4:
             break
 
         # Combine spread of pedestal and pe peaks
         pe_sigma = sqrt(k * spe_sigma ** 2 + eped_sigma ** 2)
 
         # Evaluate probability at each value of x
-        spectrum += pk * normal_pdf(x, eped + k * spe, pe_sigma)
+        spectrum += p * normal_pdf(x, eped + k * spe, pe_sigma)
 
     return spectrum

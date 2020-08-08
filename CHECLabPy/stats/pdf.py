@@ -32,7 +32,7 @@ def poisson(k, mu):
     return exp(k * log(mu) - mu - lgamma(k + 1))
 
 
-@vectorize([float64(float32, float64, float64)], fastmath=True)
+@vectorize([float64(float64, float64, float64)], fastmath=True)
 def normal_pdf(x, mean, std_deviation):
     """
     Obtain the normal PDF.
@@ -46,7 +46,7 @@ def normal_pdf(x, mean, std_deviation):
     return exp(-0.5 * u ** 2) / (SQRT2PI * std_deviation)
 
 
-@vectorize([float64(float32, float64)], fastmath=True)
+@vectorize([float64(float64, float64)], fastmath=True)
 def xlogy(x, y):
     if x == 0 and not isnan(y):
         return 0
@@ -54,6 +54,6 @@ def xlogy(x, y):
         return x * log(y)
 
 
-@vectorize([float64(float32, float64)], fastmath=True)
+@vectorize([float64(float64, float64)], fastmath=True)
 def poisson_logpmf(k, mu):
     return xlogy(k, mu) - lgamma(k + 1) - mu

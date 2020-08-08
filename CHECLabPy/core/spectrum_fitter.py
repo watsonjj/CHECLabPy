@@ -133,6 +133,7 @@ class SpectrumFitter:
         self.n_bins = 100
         self.range = (-10, 100)
 
+        self.charges = None
         self.charge_hist_x = None
         self.charge_hist_y = None
         self.charge_hist_y_typed = None
@@ -266,6 +267,7 @@ class SpectrumFitter:
             self.n_illuminations.
         """
         assert len(charges) == self.n_illuminations
+        self.charges = typed.List()
         self.charge_hist_y = []
         self.charge_hist_y_typed = typed.List()
         for i in range(self.n_illuminations):
@@ -274,14 +276,16 @@ class SpectrumFitter:
             )
             between = (edges[1:] + edges[:-1]) / 2
 
-            self.charge_hist_x = between.astype(np.float32)
-            self.charge_hist_y.append(hist.astype(np.float32))
-            self.charge_hist_y_typed.append(hist.astype(np.float32))
-            self.charge_hist_edges = edges.astype(np.float32)
+            self.charge_hist_x = between.astype(np.float64)
+            self.charge_hist_y.append(hist.astype(np.float64))
+            self.charge_hist_y_typed.append(hist.astype(np.float64))
+            self.charge_hist_edges = edges.astype(np.float64)
+            c = charges[i][(charges[i] >= self.range[0]) & (charges[i] <= self.range[1])]
+            self.charges.append(c.astype(np.float64))
 
         m0 = iminuit.Minuit(
             self._minimize_function, **self.parameters.minuit_kwargs,
-            print_level=0, pedantic=False, throw_nan=True, errordef=1,
+            print_level=0, pedantic=False, throw_nan=True, errordef=0.5,
             forced_parameters=self.parameters.parameter_names
         )
         m0.migrad()
@@ -296,8 +300,7 @@ class SpectrumFitter:
         try:
             return self._get_likelihood(
                 self.n_illuminations,
-                self.charge_hist_x,
-                self.charge_hist_y_typed,
+                self.charges,
                 self.parameters.lookup_typed,
                 *parameter_values,
             )
@@ -335,7 +338,7 @@ class SpectrumFitter:
 
     @staticmethod
     @abstractmethod
-    def _get_likelihood(n_illuminations, data_x, data_y, lookup, *parameter_values):
+    def _get_likelihood(n_illuminations, data, lookup, *parameter_values):
         """
         Abstract method to be defined by the SpectrumFitter subclass
 
